@@ -1,0 +1,59 @@
+vrrp_instance VirtIP_10 {
+    state {{ keepalived_role }}
+    interface {{ local_interface }}
+    virtual_router_id 10
+    priority 100
+    advert_int 3
+    authentication {
+        auth_type PASS
+        auth_pass MY_PASS
+    }
+    virtual_ipaddress {
+        {{ vip }}
+    }
+}
+
+virtual_server {{ vip }} 80 {
+    delay_loop 10
+    lb_algo rr
+    lb_kind NAT
+    persistence_timeout 5
+    protocol TCP
+
+    real_server {{ master_ip }} 80 {
+        weight 100
+        connect_timeout 3
+        retry 3
+        delay_before_retry 10
+
+        # MASTER NODE need to consider to make sure local services are RUNNING, and check BACKUP NODE service are DOWN.
+        # notify_up
+        # MASTER NODE need to call labkeeper to create a new BACKUP NODE, and setup original BACKUP NODE services.
+        # Details: check the remote side(MASTER TO BACKUP) is OK, if OK, let remote one to continue, local just jump, if not, we do it selves.
+        notify_down "/root/notify_down.sh {{ master_ip }} MASTER {{ backup_ip }} {{ keepalived_role }}"
+        MISC_CHECK {
+            # PERIOD check MASTER NODE local services are OK.
+            misc_path "/root/check_master.sh {{ master_ip }}"
+                misc_timeout 5
+        }
+    }
+
+
+    real_server {{ backup_ip }} 80 {
+        weight 50
+        connect_timeout 3
+        retry 3
+        delay_before_retry 10
+
+        # BACKUP NODE need to consider to make sure local services are DOWN, and check MASTER NODE services are RUNNING.
+        # notify_up
+        # BACKUP NODE need to consider to call labkeeper to create a new BACKUP Node.
+        # Details: check the remote side(BACKUP TO MASTER) is OK, if OK, let remote one to continue, local just jump, if not, we do it selves.
+        notify_down "/root/notify_down.sh {{ backup_ip }} BACKUP {{ master_ip }} {{ keepalived_role }}"
+        MISC_CHECK {
+            # PERIOD check BACKUP NODE local services are OK.
+            misc_path "/root/check_backup.sh {{ backup_ip }}"
+                misc_timeout 5
+        }
+    }
+}

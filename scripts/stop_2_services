@@ -1,0 +1,2 @@
+systemctl stop nodepool-launcher
+systemctl stop zuul-scheduler
